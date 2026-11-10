@@ -220,7 +220,7 @@ export function useCameraAndHands({
       setModelStatus('loading');
       try {
         const vision = await FilesetResolver.forVisionTasks(
-          'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18/wasm'
+          'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.2.2/wasm'
         );
         if (cancelled) return;
 
@@ -275,7 +275,7 @@ export function useCameraAndHands({
     return () => {
       cancelled = true;
     };
-  }, [handTrackingEnabled, modelStatus]);
+  }, [handTrackingEnabled]);
 
   // Real-time MediaPipe Video Detection Loop
   useEffect(() => {
