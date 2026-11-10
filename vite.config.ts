@@ -8,8 +8,9 @@ import { viteSingleFile } from "vite-plugin-singlefile";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// https://vite.dev/config/
+// GitHub Pages project-site URL: https://sticklycodes-10.github.io/WebVision/
 export default defineConfig({
+  base: "/WebVision/",
   plugins: [react(), tailwindcss(), viteSingleFile()],
   resolve: {
     alias: {
