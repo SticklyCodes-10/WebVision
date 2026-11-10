@@ -216,7 +216,7 @@ export function useCameraAndHands({
     let cancelled = false;
 
     async function initMediaPipe() {
-      if (!handTrackingEnabled || landmarkerRef.current || modelStatus === 'loading') return;
+      if (!handTrackingEnabled || landmarkerRef.current) return;
       setModelStatus('loading');
       try {
         const vision = await FilesetResolver.forVisionTasks(
