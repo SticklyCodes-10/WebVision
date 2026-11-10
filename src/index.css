@@ -5,3 +5,4 @@ html,body,#root{width:100%;height:100%;min-height:100%;margin:0;overflow:hidden;
 .camera-only{position:fixed;inset:0;width:100vw;height:100dvh;background:#000;overflow:hidden}
 .camera-only video,.camera-only canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}
 .camera-only canvas{pointer-events:none}
+.gaze-dot{position:absolute;left:50%;top:50%;width:12px;height:12px;border-radius:50%;background:#fff;box-shadow:0 0 12px 3px rgba(255,255,255,.55);transform:translate(-50%,-50%);pointer-events:none;z-index:5;will-change:left,top,background-color;transition:background-color 90ms linear}
