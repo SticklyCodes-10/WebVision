@@ -69,6 +69,9 @@ export function useCameraAndHands({
     y: typeof window !== 'undefined' ? window.innerHeight / 2 : 400,
   });
   const wasPinchingRef = useRef<boolean>(false);
+  const pinchCandidateFramesRef = useRef<number>(0);
+  const lastTelemetryUpdateRef = useRef<number>(0);
+  const discreteGestureFiredRef = useRef<boolean>(false);
   const gestureHoldStartRef = useRef<{ gesture: HandGestureType; timestamp: number }>({
     gesture: 'none',
     timestamp: 0,
@@ -285,6 +288,7 @@ export function useCameraAndHands({
     }
 
     let lastVideoTime = -1;
+    let lastDetectionTime = 0;
     let active = true;
 
     const detectFrame = () => {
@@ -304,8 +308,10 @@ export function useCameraAndHands({
           fpsCounterRef.current.lastTime = now;
         }
 
-        if (video.currentTime !== lastVideoTime) {
+        // Hand inference is expensive; cap it at ~30 FPS instead of running on every display refresh.
+        if (video.currentTime !== lastVideoTime && now - lastDetectionTime >= 33) {
           lastVideoTime = video.currentTime;
+          lastDetectionTime = now;
           try {
             const result = landmarker.detectForVideo(video, now);
 
@@ -343,7 +349,18 @@ export function useCameraAndHands({
 
               // Classify Gesture
               let gesture: HandGestureType = 'pointing';
-              const isPinching = pinchDistance < threshold;
+              // Hysteresis prevents the pinch state flickering at the threshold.
+              const pinchEnterThreshold = threshold;
+              const pinchReleaseThreshold = threshold * 1.32;
+              let isPinching = wasPinchingRef.current
+                ? pinchDistance < pinchReleaseThreshold
+                : pinchDistance < pinchEnterThreshold;
+              if (!wasPinchingRef.current && isPinching) {
+                pinchCandidateFramesRef.current += 1;
+                isPinching = pinchCandidateFramesRef.current >= 2;
+              } else if (!isPinching) {
+                pinchCandidateFramesRef.current = 0;
+              }
 
               if (isPinching) {
                 gesture = 'pinch';
@@ -386,22 +403,28 @@ export function useCameraAndHands({
               const targetX = Math.max(12, Math.min(window.innerWidth - 12, normX * window.innerWidth));
               const targetY = Math.max(12, Math.min(window.innerHeight - 12, normY * window.innerHeight));
 
-              const alpha = Math.max(0.15, Math.min(0.85, 1 - smoothing));
+              // Smooth more at rest, but allow faster response during intentional movement.
               const prevX = smoothedPosRef.current.x;
               const prevY = smoothedPosRef.current.y;
-              const nextX = prevX + (targetX - prevX) * alpha;
-              const nextY = prevY + (targetY - prevY) * alpha;
+              const distanceToTarget = Math.hypot(targetX - prevX, targetY - prevY);
+              const configuredAlpha = 0.14 + (1 - smoothing) * 0.34;
+              const movementBoost = Math.min(0.22, distanceToTarget / 900);
+              const alpha = Math.max(0.12, Math.min(0.52, configuredAlpha + movementBoost));
+              const nextX = distanceToTarget < 1.6 ? prevX : prevX + (targetX - prevX) * alpha;
+              const nextY = distanceToTarget < 1.6 ? prevY : prevY + (targetY - prevY) * alpha;
               smoothedPosRef.current = { x: nextX, y: nextY };
 
               // Handle Pinch state transitions for real interactive clicks & window dragging
               if (isPinching && !wasPinchingRef.current) {
                 wasPinchingRef.current = true;
+                pinchCandidateFramesRef.current = 0;
                 spatialAudio.playPinchClick();
                 callbacksRef.current.onPinchStart?.(nextX, nextY);
               } else if (isPinching && wasPinchingRef.current) {
                 callbacksRef.current.onPinchMove?.(nextX, nextY, nextX - prevX, nextY - prevY);
               } else if (!isPinching && wasPinchingRef.current) {
                 wasPinchingRef.current = false;
+                pinchCandidateFramesRef.current = 0;
                 callbacksRef.current.onPinchEnd?.(nextX, nextY);
               }
 
@@ -410,9 +433,11 @@ export function useCameraAndHands({
                 if (gestureHoldStartRef.current.gesture !== gesture) {
                   gestureHoldStartRef.current = { gesture, timestamp: now };
                 } else if (
-                  now - gestureHoldStartRef.current.timestamp > 430 &&
-                  now - lastDiscreteTriggerRef.current > 1450
+                  now - gestureHoldStartRef.current.timestamp > 500 &&
+                  !discreteGestureFiredRef.current &&
+                  now - lastDiscreteTriggerRef.current > 700
                 ) {
+                  discreteGestureFiredRef.current = true;
                   lastDiscreteTriggerRef.current = now;
                   spatialAudio.playGestureRecognized(gesture);
                   if (gesture === 'open_palm') {
@@ -425,9 +450,14 @@ export function useCameraAndHands({
                 }
               } else {
                 gestureHoldStartRef.current = { gesture: 'none', timestamp: now };
+                discreteGestureFiredRef.current = false;
               }
 
-              setTelemetry({
+              // React state drives the UI, so publish telemetry at 20 Hz rather than
+              // forcing the entire desktop to re-render on every camera frame.
+              if (now - lastTelemetryUpdateRef.current >= 50) {
+                lastTelemetryUpdateRef.current = now;
+                setTelemetry({
                 detected: true,
                 gesture,
                 confidence,
@@ -440,12 +470,16 @@ export function useCameraAndHands({
                 landmarks: lm,
                 handedness: handednessName,
                 fps: fpsCounterRef.current.fps,
-              });
+                });
+              }
             } else {
               if (wasPinchingRef.current) {
                 wasPinchingRef.current = false;
+                pinchCandidateFramesRef.current = 0;
                 callbacksRef.current.onPinchEnd?.(smoothedPosRef.current.x, smoothedPosRef.current.y);
               }
+              gestureHoldStartRef.current = { gesture: 'none', timestamp: now };
+              discreteGestureFiredRef.current = false;
               setTelemetry((prev) =>
                 prev.detected
                   ? {
