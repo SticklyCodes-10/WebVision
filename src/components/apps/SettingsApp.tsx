@@ -207,138 +207,26 @@ export const SettingsApp: React.FC<SettingsAppProps> = ({
             <div className="vision-card rounded-2xl p-3.5 space-y-3">
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="text-sm font-semibold text-white">Hand Tracking Engine</h3>
+                  <h3 className="text-sm font-semibold text-white">MediaPipe Hand Tracking</h3>
                   <p className="text-[11px] text-white/70">
-                    {settings.trackingEngine === 'mediapipe' ? 'MediaPipe 21-keypoint GPU/CPU tracking' : 'TensorFlow.js 21-keypoint WebGL tracking'} · Status:{' '}
+                    21-keypoint GPU/CPU tracking · Status:{' '}
                     <span className="text-sky-300 uppercase font-semibold">{modelStatus}</span>
                   </p>
                 </div>
                 <button
                   type="button"
-                  onClick={() =>
-                    onUpdateSettings({ handTrackingEnabled: !settings.handTrackingEnabled })
-                  }
+                  onClick={() => onUpdateSettings({ handTrackingEnabled: !settings.handTrackingEnabled })}
                   className={`px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all ${
-                    settings.handTrackingEnabled
-                      ? 'bg-emerald-500 text-slate-950'
-                      : 'bg-white/15 text-white'
+                    settings.handTrackingEnabled ? 'bg-emerald-500 text-slate-950' : 'bg-white/15 text-white'
                   }`}
                 >
                   {settings.handTrackingEnabled ? 'Tracking Active' : 'Tracking Paused'}
                 </button>
               </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => onUpdateSettings({ trackingEngine: 'mediapipe' })}
-                  className={`p-3 rounded-xl border text-left transition-all ${settings.trackingEngine === 'mediapipe' ? 'bg-sky-500/25 border-sky-400 text-white' : 'bg-white/5 border-white/10 text-white/70'}`}
-                >
-                  <div className="text-xs font-semibold">MediaPipe HandLandmarker</div>
-                  <div className="text-[10px] text-white/60 mt-1">GPU delegate with CPU fallback · 21 landmarks</div>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onUpdateSettings({ trackingEngine: 'tensorflow' })}
-                  className={`p-3 rounded-xl border text-left transition-all ${settings.trackingEngine === 'tensorflow' ? 'bg-violet-500/25 border-violet-400 text-white' : 'bg-white/5 border-white/10 text-white/70'}`}
-                >
-                  <div className="text-xs font-semibold">TensorFlow.js Hand Pose</div>
-                  <div className="text-[10px] text-white/60 mt-1">Independent TFJS model · WebGL backend</div>
-                </button>
-              </div>
               <p className="text-[10px] text-white/55">
-                Switching engines reloads the selected hand model. TensorFlow.js loads its WebGL backend and hand model on first use.
+                MediaPipe HandLandmarker uses GPU acceleration when available and automatically falls back to CPU.
               </p>
-
               {/* Pinch Sensitivity Slider */}
-              <div className="space-y-1 pt-2 border-t border-white/10">
-                <div className="flex justify-between text-xs">
-                  <span>Pinch Gesture Sensitivity Threshold</span>
-                  <span className="font-mono text-emerald-300">
-                    {settings.pinchSensitivity.toFixed(3)}
-                  </span>
-                </div>
-                <input
-                  type="range"
-                  min={0.035}
-                  max={0.115}
-                  step={0.003}
-                  value={settings.pinchSensitivity}
-                  onChange={(e) =>
-                    onUpdateSettings({ pinchSensitivity: Number(e.target.value) })
-                  }
-                  className="w-full accent-emerald-400"
-                />
-                <div className="flex justify-between text-[10px] text-white/55">
-                  <span>Tighter Pinch (0.035)</span>
-                  <span>Relaxed Pinch (0.115)</span>
-                </div>
-              </div>
-
-              {/* Cursor Smoothing Slider */}
-              <div className="space-y-1 pt-1">
-                <div className="flex justify-between text-xs">
-                  <span>Spatial Cursor Stabilization (EMA Smoothing)</span>
-                  <span className="font-mono text-sky-300">
-                    {Math.round(settings.cursorSmoothing * 100)}%
-                  </span>
-                </div>
-                <input
-                  type="range"
-                  min={0.15}
-                  max={0.85}
-                  step={0.05}
-                  value={settings.cursorSmoothing}
-                  onChange={(e) =>
-                    onUpdateSettings({ cursorSmoothing: Number(e.target.value) })
-                  }
-                  className="w-full accent-sky-400"
-                />
-              </div>
-
-              <label className="flex items-center justify-between pt-2 border-t border-white/10 text-xs cursor-pointer">
-                <span>Show Corner 21-Point Hand Skeleton HUD</span>
-                <input
-                  type="checkbox"
-                  checked={settings.showHandSkeleton}
-                  onChange={(e) => onUpdateSettings({ showHandSkeleton: e.target.checked })}
-                  className="accent-sky-400 w-4 h-4"
-                />
-              </label>
-            </div>
-
-            {/* Live Gesture Telemetry Readout */}
-            <div className="vision-card rounded-2xl p-3.5 space-y-2">
-              <div className="text-xs font-semibold text-white flex items-center justify-between">
-                <span>Live Hand Telemetry</span>
-                <span className="text-[11px] font-mono text-sky-300">
-                  {telemetry.detected ? `${telemetry.fps} FPS · ${telemetry.handedness} Hand` : 'Waiting for hand in camera view'}
-                </span>
-              </div>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-xs">
-                {[
-                  { id: 'pinch', title: '🤏 Pinch', desc: 'Select & Drag' },
-                  { id: 'open_palm', title: '🖐️ Open Palm', desc: 'Home View' },
-                  { id: 'closed_fist', title: '✊ Closed Fist', desc: 'Minimize Win' },
-                  { id: 'two_fingers', title: '✌️ 2 Fingers', desc: 'Cycle Window' },
-                ].map((g) => (
-                  <div
-                    key={g.id}
-                    className={`p-2 rounded-xl border transition-all ${
-                      telemetry.gesture === g.id
-                        ? 'bg-emerald-500/30 border-emerald-300 text-white scale-105'
-                        : 'bg-white/5 border-white/10 text-white/70'
-                    }`}
-                  >
-                    <div className="font-semibold">{g.title}</div>
-                    <div className="text-[10px] text-white/55">{g.desc}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-
         {activeTab === 'appearance' && (
           <div className="space-y-3.5">
             <div className="vision-card rounded-2xl p-3.5 space-y-3">
