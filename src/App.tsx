@@ -17,9 +17,7 @@ import { useCameraAndHands } from './hooks/useCameraAndHands';
 import { AppId, VisionOSSettings, WindowState } from './types/vision';
 import { spatialAudio } from './utils/soundEffects';
 import { EntryPortalModal } from './components/EntryPortalModal';
-import { TopSpatialBar } from './components/TopSpatialBar';
 import { SpatialWindow } from './components/SpatialWindow';
-import { SpatialDock } from './components/SpatialDock';
 import { HomeAppGrid } from './components/HomeAppGrid';
 import { HandCursorOverlay } from './components/HandCursorOverlay';
 import { SafariApp } from './components/apps/SafariApp';
@@ -403,7 +401,7 @@ export function App() {
     });
     const ok = await startCamera('environment');
     if (ok) {
-      showToast('📷 Rear Camera Passthrough & MediaPipe Hand Tracking Active');
+      showToast('📷 Rear Camera Passthrough & ${settings.trackingEngine === 'tensorflow' ? 'TensorFlow.js' : 'MediaPipe'} Hand Tracking Active');
     }
   }, [startCamera, updateSettings, showToast]);
 
@@ -586,19 +584,6 @@ export function App() {
         }}
       />
 
-      {/* Top Spatial Status Bar & Digital Crown Controls */}
-      <TopSpatialBar
-        settings={settings}
-        cameraStatus={cameraStatus}
-        modelStatus={modelStatus}
-        telemetry={telemetry}
-        showHomeGrid={showHomeGrid}
-        onToggleHomeGrid={() => setShowHomeGrid((v) => !v)}
-        onUpdateSettings={updateSettings}
-        onEnterSpatialMode={handleEnterSpatialMode}
-        onToggleVRMode={handleToggleVRMode}
-        onOpenSettingsApp={() => openOrRestoreApp('settings')}
-      />
 
       {/* Graceful Camera Permission / Fallback Banner */}
       {settings.cameraEnabled &&
@@ -767,7 +752,7 @@ export function App() {
                 <Sparkles size={24} className="mx-auto text-sky-300" />
                 <h2 className="text-base font-bold text-white">Spatial Workspace Clear</h2>
                 <p className="text-xs text-white/75">
-                  Select any app from the bottom Spatial Dock, hold up an Open Palm gesture, or summon Home View.
+                  Hold up an Open Palm gesture to summon Home View, then select an app.
                 </p>
                 <div className="flex items-center justify-center gap-2 pt-1">
                   <button
@@ -824,23 +809,6 @@ export function App() {
         onCloseHomeGrid={() => setShowHomeGrid(false)}
       />
 
-      {/* Bottom Floating visionOS Application Dock */}
-      <SpatialDock
-        windows={windows}
-        focusedApp={focusedApp}
-        showHomeGrid={showHomeGrid}
-        onToggleHomeGrid={() => setShowHomeGrid((v) => !v)}
-        onSelectApp={(id) => {
-          const w = windows[id];
-          if (w.isOpen && !w.isMinimized && focusedApp === id) {
-            // Bring to center if already focused, or keep open
-            focusWindow(id);
-          } else {
-            openOrRestoreApp(id);
-          }
-          setShowHomeGrid(false);
-        }}
-      />
 
       {/* Real-Time MediaPipe Hand Cursor Reticle & 21-Point Skeleton HUD */}
       <HandCursorOverlay
