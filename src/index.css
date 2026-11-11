@@ -1,8 +1,187 @@
 @import "tailwindcss";
-:root{color-scheme:dark;background:#000}
-*{box-sizing:border-box}
-html,body,#root{width:100%;height:100%;min-height:100%;margin:0;overflow:hidden;background:#000}
-.camera-only{position:fixed;inset:0;width:100vw;height:100dvh;background:#000;overflow:hidden}
-.camera-only video,.camera-only canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}
-.camera-only canvas{pointer-events:none}
-.gaze-dot{position:absolute;left:50%;top:50%;width:12px;height:12px;border-radius:50%;background:#fff;box-shadow:0 0 12px 3px rgba(255,255,255,.55);transform:translate(-50%,-50%);pointer-events:none;z-index:5;will-change:left,top,background-color;transition:background-color 90ms linear}
+
+@layer base {
+  :root {
+    --glass-blur: 40px;
+    --glass-saturation: 185%;
+    --specular-opacity: 0.42;
+    --glass-tint-r: 255;
+    --glass-tint-g: 255;
+    --glass-tint-b: 255;
+    --glass-bg-opacity: 0.14;
+  }
+
+  * {
+    box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  html,
+  body,
+  #root {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Inter", system-ui, sans-serif;
+    background-color: #080b11;
+    color: rgba(255, 255, 255, 0.96);
+    touch-action: none;
+  }
+}
+
+/* Authentic visionOS Spatial Glass Platter */
+.vision-glass {
+  background: linear-gradient(
+    145deg,
+    rgba(var(--glass-tint-r), var(--glass-tint-g), var(--glass-tint-b), calc(var(--glass-bg-opacity) + 0.08)) 0%,
+    rgba(var(--glass-tint-r), var(--glass-tint-g), var(--glass-tint-b), var(--glass-bg-opacity)) 55%,
+    rgba(20, 25, 38, 0.36) 100%
+  );
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturation));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturation));
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  box-shadow:
+    0 30px 70px -15px rgba(0, 0, 0, 0.62),
+    0 10px 28px -8px rgba(0, 0, 0, 0.42),
+    inset 0 1.5px 1px 0 rgba(255, 255, 255, var(--specular-opacity)),
+    inset 0 -1px 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.vision-glass-active {
+  background: linear-gradient(
+    145deg,
+    rgba(var(--glass-tint-r), var(--glass-tint-g), var(--glass-tint-b), calc(var(--glass-bg-opacity) + 0.13)) 0%,
+    rgba(var(--glass-tint-r), var(--glass-tint-g), var(--glass-tint-b), calc(var(--glass-bg-opacity) + 0.03)) 55%,
+    rgba(16, 22, 36, 0.42) 100%
+  );
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturation));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturation));
+  border: 1px solid rgba(255, 255, 255, 0.38);
+  box-shadow:
+    0 38px 90px -12px rgba(0, 0, 0, 0.72),
+    0 0 36px -6px rgba(255, 255, 255, 0.14),
+    inset 0 1.5px 2px 0 rgba(255, 255, 255, calc(var(--specular-opacity) + 0.16)),
+    inset 0 -1px 1px 0 rgba(255, 255, 255, 0.14);
+}
+
+.vision-pill {
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.22) 0%,
+    rgba(255, 255, 255, 0.11) 100%
+  );
+  backdrop-filter: blur(36px) saturate(190%);
+  -webkit-backdrop-filter: blur(36px) saturate(190%);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  box-shadow:
+    0 18px 40px -10px rgba(0, 0, 0, 0.55),
+    inset 0 1px 1px 0 rgba(255, 255, 255, 0.45);
+}
+
+.vision-card {
+  background: rgba(255, 255, 255, 0.09);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.22);
+}
+
+.vision-card:hover {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.28);
+}
+
+.vision-input {
+  background: rgba(0, 0, 0, 0.26);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.38);
+}
+
+.vision-input:focus {
+  outline: none;
+  border-color: rgba(10, 132, 255, 0.8);
+  background: rgba(0, 0, 0, 0.36);
+  box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.25), inset 0 1px 3px rgba(0, 0, 0, 0.38);
+}
+
+/* Custom subtle scrollbars for spatial windows */
+.spatial-scroll {
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.25) transparent;
+  touch-action: pan-y;
+}
+
+.spatial-scroll::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+.spatial-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.spatial-scroll::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.24);
+  border-radius: 9999px;
+}
+
+.spatial-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.42);
+}
+
+/* Spatial gaze highlight on interactive targets */
+.gaze-target {
+  transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1), background-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.gaze-target:hover {
+  transform: translateY(-1px) scale(1.015);
+}
+
+.gaze-target:active {
+  transform: scale(0.97);
+}
+
+/* Stereoscopic VR Barrel Lens Vignette */
+.vr-eye-lens {
+  position: relative;
+  overflow: hidden;
+  border-radius: 38px;
+  box-shadow:
+    inset 0 0 55px 18px rgba(0, 0, 0, 0.82),
+    0 0 0 2px rgba(255, 255, 255, 0.12);
+}
+
+@keyframes floatSlow {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+.animate-float-slow {
+  animation: floatSlow 5.5s ease-in-out infinite;
+}
+
+@keyframes pulseRing {
+  0% {
+    transform: scale(0.85);
+    opacity: 0.85;
+  }
+  70% {
+    transform: scale(1.55);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1.55);
+    opacity: 0;
+  }
+}
+
+.animate-pulse-ring {
+  animation: pulseRing 1.6s cubic-bezier(0.24, 0, 0.38, 1) infinite;
+}
