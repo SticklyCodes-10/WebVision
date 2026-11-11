@@ -16,6 +16,7 @@ export const DEFAULT_SETTINGS: VisionOSSettings = {
   cameraFacingMode: 'environment',
   mirrorCamera: false,
   handTrackingEnabled: true,
+  trackingEngine: 'mediapipe',
   showHandSkeleton: true,
   pinchSensitivity: 0.068,
   cursorSmoothing: 0.42,

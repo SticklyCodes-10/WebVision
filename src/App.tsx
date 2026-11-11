@@ -363,6 +363,7 @@ export function App() {
     facingMode: settings.cameraFacingMode,
     mirrorCamera: settings.mirrorCamera,
     handTrackingEnabled: settings.handTrackingEnabled,
+    trackingEngine: settings.trackingEngine,
     pinchSensitivity: settings.pinchSensitivity,
     cursorSmoothing: settings.cursorSmoothing,
     onPinchStart: handleHandPinchStart,

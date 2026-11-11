@@ -67,6 +67,7 @@ export interface VisionOSSettings {
   cameraFacingMode: 'environment' | 'user';
   mirrorCamera: boolean;
   handTrackingEnabled: boolean;
+  trackingEngine: 'mediapipe' | 'tensorflow';
   showHandSkeleton: boolean;
   pinchSensitivity: number; // 0.035 to 0.11 (default 0.065)
   cursorSmoothing: number; // 0.15 to 0.85

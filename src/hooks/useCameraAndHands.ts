@@ -3,11 +3,17 @@ import { FilesetResolver, HandLandmarker } from '@mediapipe/tasks-vision';
 import { HandGestureType, HandTelemetry, NormalizedLandmark } from '../types/vision';
 import { spatialAudio } from '../utils/soundEffects';
 
+interface TfHandPoseDetector {
+  estimateHands(input: HTMLVideoElement): Promise<Array<{ keypoints: Array<{ x: number; y: number; z?: number; name?: string }>; handedness?: string; score?: number }>>;
+  dispose(): void;
+}
+
 interface UseCameraAndHandsOptions {
   cameraEnabled: boolean;
   facingMode: 'environment' | 'user';
   mirrorCamera: boolean;
   handTrackingEnabled: boolean;
+  trackingEngine: 'mediapipe' | 'tensorflow';
   pinchSensitivity: number;
   cursorSmoothing: number;
   onPinchStart?: (x: number, y: number) => void;
@@ -29,6 +35,7 @@ export function useCameraAndHands({
   facingMode,
   mirrorCamera,
   handTrackingEnabled,
+  trackingEngine,
   pinchSensitivity,
   cursorSmoothing,
   onPinchStart,
@@ -41,6 +48,7 @@ export function useCameraAndHands({
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const landmarkerRef = useRef<HandLandmarker | null>(null);
+  const tfDetectorRef = useRef<TfHandPoseDetector | null>(null);
   const rafRef = useRef<number | null>(null);
 
   const [cameraStatus, setCameraStatus] = useState<'idle' | 'requesting' | 'active' | 'denied' | 'error'>('idle');
@@ -214,73 +222,93 @@ export function useCameraAndHands({
     };
   }, [cameraEnabled, facingMode, startCamera, stopCamera]);
 
-  // Initialize MediaPipe HandLandmarker when handTrackingEnabled is true
+  // Initialize the selected hand-tracking engine.
   useEffect(() => {
     let cancelled = false;
 
-    async function initMediaPipe() {
-      if (!handTrackingEnabled || landmarkerRef.current) return;
+    async function initializeTracker() {
+      if (!handTrackingEnabled) return;
       setModelStatus('loading');
       try {
-        const vision = await FilesetResolver.forVisionTasks(
-          'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.2.2/wasm'
-        );
-        if (cancelled) return;
-
-        let landmarker: HandLandmarker;
-        try {
-          landmarker = await HandLandmarker.createFromOptions(vision, {
-            baseOptions: {
-              modelAssetPath:
-                'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task',
-              delegate: 'GPU',
-            },
-            runningMode: 'VIDEO',
-            numHands: 1,
-            minHandDetectionConfidence: 0.48,
-            minHandPresenceConfidence: 0.48,
-            minTrackingConfidence: 0.48,
+        if (trackingEngine === 'mediapipe') {
+          const vision = await FilesetResolver.forVisionTasks(
+            'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.2.2/wasm'
+          );
+          if (cancelled) return;
+          let landmarker: HandLandmarker;
+          try {
+            landmarker = await HandLandmarker.createFromOptions(vision, {
+              baseOptions: {
+                modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task',
+                delegate: 'GPU',
+              },
+              runningMode: 'VIDEO',
+              numHands: 1,
+              minHandDetectionConfidence: 0.48,
+              minHandPresenceConfidence: 0.48,
+              minTrackingConfidence: 0.48,
+            });
+          } catch {
+            landmarker = await HandLandmarker.createFromOptions(vision, {
+              baseOptions: {
+                modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task',
+                delegate: 'CPU',
+              },
+              runningMode: 'VIDEO',
+              numHands: 1,
+              minHandDetectionConfidence: 0.45,
+              minHandPresenceConfidence: 0.45,
+              minTrackingConfidence: 0.45,
+            });
+          }
+          if (cancelled) { landmarker.close(); return; }
+          landmarkerRef.current = landmarker;
+        } else {
+          // Load TFJS modules from ESM CDN so this optional engine does not add
+          // a large mandatory bundle to the default MediaPipe experience.
+          // @ts-expect-error Runtime ESM URL import is intentional.
+          const tfCore = await import(/* @vite-ignore */ 'https://esm.sh/@tensorflow/tfjs-core@4.22.0');
+          // @ts-expect-error Runtime ESM URL import is intentional.
+          await import(/* @vite-ignore */ 'https://esm.sh/@tensorflow/tfjs-converter@4.22.0');
+          // @ts-expect-error Runtime ESM URL import is intentional.
+          await import(/* @vite-ignore */ 'https://esm.sh/@tensorflow/tfjs-backend-webgl@4.22.0');
+          // @ts-expect-error Runtime ESM URL import is intentional.
+          const handPose = await import(/* @vite-ignore */ 'https://esm.sh/@tensorflow-models/hand-pose-detection@2.0.1?external=@tensorflow/tfjs-core,@tensorflow/tfjs-converter');
+          await tfCore.setBackend('webgl');
+          await tfCore.ready();
+          if (cancelled) return;
+          const detector = await handPose.createDetector(handPose.SupportedModels.MediaPipeHands, {
+            runtime: 'tfjs',
+            modelType: 'lite',
+            maxHands: 1,
           });
-        } catch {
-          // CPU fallback if WebGL GPU delegate isn't available
-          landmarker = await HandLandmarker.createFromOptions(vision, {
-            baseOptions: {
-              modelAssetPath:
-                'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task',
-              delegate: 'CPU',
-            },
-            runningMode: 'VIDEO',
-            numHands: 1,
-            minHandDetectionConfidence: 0.45,
-            minHandPresenceConfidence: 0.45,
-            minTrackingConfidence: 0.45,
-          });
+          if (cancelled) { detector.dispose(); return; }
+          tfDetectorRef.current = detector as TfHandPoseDetector;
         }
-
-        if (cancelled) {
-          landmarker.close();
-          return;
-        }
-        landmarkerRef.current = landmarker;
-        setModelStatus('ready');
+        if (!cancelled) setModelStatus('ready');
       } catch (err) {
-        console.warn('MediaPipe HandLandmarker initialization warning:', err);
-        if (!cancelled) {
-          setModelStatus('error');
-        }
+        console.warn(` ${trackingEngine} hand tracker initialization failed:`, err);
+        if (!cancelled) setModelStatus('error');
       }
     }
 
-    if (handTrackingEnabled) {
-      initMediaPipe();
-    }
+    // Tear down the previous engine before switching.
+    landmarkerRef.current?.close();
+    landmarkerRef.current = null;
+    tfDetectorRef.current?.dispose();
+    tfDetectorRef.current = null;
+    initializeTracker();
 
     return () => {
       cancelled = true;
+      landmarkerRef.current?.close();
+      landmarkerRef.current = null;
+      tfDetectorRef.current?.dispose();
+      tfDetectorRef.current = null;
     };
-  }, [handTrackingEnabled]);
+  }, [handTrackingEnabled, trackingEngine]);
 
-  // Real-time MediaPipe Video Detection Loop
+  // Shared real-time detection loop for both engines
   useEffect(() => {
     if (!cameraEnabled || !handTrackingEnabled || cameraStatus !== 'active' || modelStatus !== 'ready') {
       setTelemetry((prev) => (prev.detected ? { ...prev, detected: false, gesture: 'none', isPinching: false } : prev));
@@ -291,13 +319,14 @@ export function useCameraAndHands({
     let lastDetectionTime = 0;
     let active = true;
 
-    const detectFrame = () => {
+    const detectFrame = async () => {
       if (!active) return;
 
       const video = videoRef.current;
       const landmarker = landmarkerRef.current;
+      const tfDetector = tfDetectorRef.current;
 
-      if (video && landmarker && video.readyState >= 2 && video.videoWidth > 0) {
+      if (video && (trackingEngine === 'mediapipe' ? !!landmarker : !!tfDetector) && video.readyState >= 2 && video.videoWidth > 0) {
         const now = performance.now();
 
         // Update FPS counter
@@ -313,13 +342,41 @@ export function useCameraAndHands({
           lastVideoTime = video.currentTime;
           lastDetectionTime = now;
           try {
-            const result = landmarker.detectForVideo(video, now);
+            let lm: NormalizedLandmark[] | null = null;
+            let handednessName: 'Left' | 'Right' | 'Unknown' = 'Unknown';
+            let confidence = 0.92;
 
-            if (result.landmarks && result.landmarks.length > 0) {
-              const lm = result.landmarks[0] as NormalizedLandmark[];
-              const handednessCat = result.handednesses?.[0]?.[0];
-              const handednessName = (handednessCat?.categoryName as 'Left' | 'Right') || 'Right';
-              const confidence = handednessCat?.score ?? 0.92;
+            if (trackingEngine === 'mediapipe' && landmarker) {
+              const result = landmarker.detectForVideo(video, now);
+              const category = result.handednesses?.[0]?.[0];
+              if (result.landmarks?.[0]) {
+                lm = result.landmarks[0] as NormalizedLandmark[];
+                handednessName = (category?.categoryName as 'Left' | 'Right') || 'Right';
+                confidence = category?.score ?? 0.92;
+              }
+            } else if (trackingEngine === 'tensorflow' && tfDetector) {
+              const hands = await tfDetector.estimateHands(video);
+              const hand = hands[0];
+              if (hand?.keypoints?.length) {
+                const byName = new Map(hand.keypoints.map((point) => [point.name || '', point]));
+                const names = [
+                  'wrist',
+                  'thumb_cmc', 'thumb_mcp', 'thumb_ip', 'thumb_tip',
+                  'index_finger_mcp', 'index_finger_pip', 'index_finger_dip', 'index_finger_tip',
+                  'middle_finger_mcp', 'middle_finger_pip', 'middle_finger_dip', 'middle_finger_tip',
+                  'ring_finger_mcp', 'ring_finger_pip', 'ring_finger_dip', 'ring_finger_tip',
+                  'pinky_finger_mcp', 'pinky_finger_pip', 'pinky_finger_dip', 'pinky_finger_tip',
+                ];
+                lm = names.map((name, index) => {
+                  const point = byName.get(name) || hand.keypoints[index];
+                  return { x: point.x / video.videoWidth, y: point.y / video.videoHeight, z: point.z || 0 };
+                });
+                handednessName = hand.handedness === 'Left' ? 'Left' : hand.handedness === 'Right' ? 'Right' : 'Unknown';
+                confidence = hand.score ?? 0.9;
+              }
+            }
+
+            if (lm) {
 
               // Key landmarks
               const wrist = lm[0];
@@ -509,7 +566,7 @@ export function useCameraAndHands({
         cancelAnimationFrame(rafRef.current);
       }
     };
-  }, [cameraEnabled, handTrackingEnabled, cameraStatus, modelStatus]);
+  }, [cameraEnabled, handTrackingEnabled, cameraStatus, modelStatus, trackingEngine]);
 
   // Capture a live photo snapshot from the active camera video feed
   const captureCameraFrame = useCallback((): string | null => {

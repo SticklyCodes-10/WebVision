@@ -207,9 +207,9 @@ export const SettingsApp: React.FC<SettingsAppProps> = ({
             <div className="vision-card rounded-2xl p-3.5 space-y-3">
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="text-sm font-semibold text-white">MediaPipe Real-Time Hand Tracking</h3>
+                  <h3 className="text-sm font-semibold text-white">Hand Tracking Engine</h3>
                   <p className="text-[11px] text-white/70">
-                    21-keypoint 3D hand landmark detection · Engine:{' '}
+                    {settings.trackingEngine === 'mediapipe' ? 'MediaPipe 21-keypoint GPU/CPU tracking' : 'TensorFlow.js 21-keypoint WebGL tracking'} · Status:{' '}
                     <span className="text-sky-300 uppercase font-semibold">{modelStatus}</span>
                   </p>
                 </div>
@@ -227,6 +227,29 @@ export const SettingsApp: React.FC<SettingsAppProps> = ({
                   {settings.handTrackingEnabled ? 'Tracking Active' : 'Tracking Paused'}
                 </button>
               </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => onUpdateSettings({ trackingEngine: 'mediapipe' })}
+                  className={`p-3 rounded-xl border text-left transition-all ${settings.trackingEngine === 'mediapipe' ? 'bg-sky-500/25 border-sky-400 text-white' : 'bg-white/5 border-white/10 text-white/70'}`}
+                >
+                  <div className="text-xs font-semibold">MediaPipe HandLandmarker</div>
+                  <div className="text-[10px] text-white/60 mt-1">GPU delegate with CPU fallback · 21 landmarks</div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onUpdateSettings({ trackingEngine: 'tensorflow' })}
+                  className={`p-3 rounded-xl border text-left transition-all ${settings.trackingEngine === 'tensorflow' ? 'bg-violet-500/25 border-violet-400 text-white' : 'bg-white/5 border-white/10 text-white/70'}`}
+                >
+                  <div className="text-xs font-semibold">TensorFlow.js Hand Pose</div>
+                  <div className="text-[10px] text-white/60 mt-1">Independent TFJS model · WebGL backend</div>
+                </button>
+              </div>
+              <p className="text-[10px] text-white/55">
+                Switching engines reloads the hand model. TensorFlow.js downloads its model the first time you select it.
+                MediaPipe stays selected by default; you can switch back here at any time.
+              </p>
 
               {/* Pinch Sensitivity Slider */}
               <div className="space-y-1 pt-2 border-t border-white/10">
