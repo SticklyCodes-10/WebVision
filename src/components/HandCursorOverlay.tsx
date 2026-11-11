@@ -103,8 +103,8 @@ export const HandCursorOverlay: React.FC<HandCursorOverlayProps> = ({
         <div
           className="fixed pointer-events-none z-[120]"
           style={{
-            left: `${telemetry.cursorX}px`,
-            top: `${telemetry.cursorY}px`,
+            left: 'var(--hand-cursor-x, 50vw)',
+            top: 'var(--hand-cursor-y, 50vh)',
             transform: 'translate(-50%, -50%)',
           }}
         >
@@ -147,7 +147,7 @@ export const HandCursorOverlay: React.FC<HandCursorOverlayProps> = ({
         </div>
       )}
 
-      {/* Corner MediaPipe 21-Point Hand Skeleton Telemetry HUD */}
+      {/* Corner Hand Tracking Telemetry HUD */}
       {showHandSkeleton && (
         <div className="fixed bottom-20 right-3 z-[88] w-48 sm:w-52 rounded-3xl vision-glass p-2.5 text-white shadow-2xl border border-white/25">
           <div className="flex items-center justify-between mb-1.5 px-1">
