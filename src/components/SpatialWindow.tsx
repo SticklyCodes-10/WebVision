@@ -33,7 +33,7 @@ const SpatialWindowComponent: React.FC<SpatialWindowProps> = ({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
-  const [tilt, setTilt] = useState<{ rx: number; ry: number }>({ rx: 0, ry: 0 });
+  const tiltRef = useRef<{ rx: number; ry: number }>({ rx: 0, ry: 0 });
   const [chromeHovered, setChromeHovered] = useState(false);
 
   const dragOffsetRef = useRef<{ startX: number; startY: number; origX: number; origY: number }>({
@@ -130,22 +130,30 @@ const SpatialWindowComponent: React.FC<SpatialWindowProps> = ({
   // Subtle 3D spatial tilt on pointer move
   const handlePointerMoveTilt = (e: React.PointerEvent<HTMLDivElement>) => {
     if (!depthTiltEnabled || isDragging || isResizing) {
-      if (tilt.rx !== 0 || tilt.ry !== 0) setTilt({ rx: 0, ry: 0 });
+      if (tiltRef.current.rx !== 0 || tiltRef.current.ry !== 0) {
+        tiltRef.current = { rx: 0, ry: 0 };
+        if (containerRef.current) {
+          containerRef.current.style.transform = `perspective(1200px) rotateX(0deg) rotateY(0deg) scale(${isDragging ? scaleMultiplier * 1.018 : scaleMultiplier})`;
+        }
+      }
       return;
     }
     const rect = containerRef.current?.getBoundingClientRect();
     if (!rect) return;
     const normX = (e.clientX - rect.left) / rect.width - 0.5;
     const normY = (e.clientY - rect.top) / rect.height - 0.5;
-    setTilt({
-      rx: Number((-normY * 2.8).toFixed(2)),
-      ry: Number((normX * 3.2).toFixed(2)),
-    });
+    const rx = Number((-normY * 2.8).toFixed(2));
+    const ry = Number((normX * 3.2).toFixed(2));
+    tiltRef.current = { rx, ry };
+    containerRef.current.style.transform = `perspective(1200px) rotateX(${rx}deg) rotateY(${ry}deg) scale(${isDragging ? scaleMultiplier * 1.018 : scaleMultiplier})`;
   };
 
   const handlePointerLeaveTilt = () => {
-    if (tilt.rx !== 0 || tilt.ry !== 0) {
-      setTilt({ rx: 0, ry: 0 });
+    if (tiltRef.current.rx !== 0 || tiltRef.current.ry !== 0) {
+      tiltRef.current = { rx: 0, ry: 0 };
+      if (containerRef.current) {
+        containerRef.current.style.transform = `perspective(1200px) rotateX(0deg) rotateY(0deg) scale(${scaleMultiplier})`;
+      }
     }
   };
 
@@ -163,7 +171,7 @@ const SpatialWindowComponent: React.FC<SpatialWindowProps> = ({
         width: `${windowState.width}px`,
         height: `${windowState.height}px`,
         zIndex: windowState.zIndex,
-        transform: `perspective(1200px) rotateX(${tilt.rx}deg) rotateY(${tilt.ry}deg) scale(${
+        transform: `perspective(1200px) rotateX(${tiltRef.current.rx}deg) rotateY(${tiltRef.current.ry}deg) scale(${
           isDragging ? scaleMultiplier * 1.018 : scaleMultiplier
         })`,
         transition:
