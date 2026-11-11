@@ -24,7 +24,7 @@ export const DEFAULT_SETTINGS: VisionOSSettings = {
   vrLensDistortion: true,
   environmentId: 'yosemite',
   immersionLevel: 25, // 25% ambient tint when camera is active, or 100% when no camera
-  glassBlur: 40,
+  glassBlur: 24,
   specularIntensity: 0.45,
   glassOpacity: 0.14,
   glassTheme: 'pure',
