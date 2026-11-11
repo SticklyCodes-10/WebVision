@@ -3,6 +3,76 @@ import { FilesetResolver, HandLandmarker } from '@mediapipe/tasks-vision';
 import { HandGestureType, HandTelemetry, NormalizedLandmark } from '../types/vision';
 import { spatialAudio } from '../utils/soundEffects';
 
+type TfJsBrowserRuntime = {
+  setBackend(name: string): Promise<boolean>;
+  ready(): Promise<void>;
+  getBackend(): string;
+};
+
+type TfHandPoseModel = {
+  estimateHands(input: HTMLVideoElement, flipHorizontal?: boolean): Promise<Array<{
+    landmarks: number[][];
+    handInViewConfidence?: number;
+  }>>;
+  dispose(): void;
+};
+
+type TfHandPoseNamespace = {
+  load(config?: { detectionConfidence?: number }): Promise<TfHandPoseModel>;
+};
+
+declare global {
+  interface Window {
+    tf?: TfJsBrowserRuntime;
+    handpose?: TfHandPoseNamespace;
+  }
+}
+
+const browserScriptPromises = new Map<string, Promise<void>>();
+
+function loadBrowserScriptOnce(src: string): Promise<void> {
+  const existing = browserScriptPromises.get(src);
+  if (existing) return existing;
+
+  const pending = new Promise<void>((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = src;
+    script.async = true;
+    script.crossOrigin = 'anonymous';
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error(`Unable to load TensorFlow.js script: ${src}`));
+    document.head.appendChild(script);
+  });
+
+  browserScriptPromises.set(src, pending);
+  return pending;
+}
+
+async function loadTensorFlowHandPoseModel(): Promise<{ tf: TfJsBrowserRuntime; model: TfHandPoseModel }> {
+  // Use the documented browser-script integration. The TFJS union bundle
+  // registers its core, converter and WebGL backend on one shared global
+  // runtime, avoiding duplicate ESM module instances and unresolved bare imports.
+  await loadBrowserScriptOnce('https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js');
+  await loadBrowserScriptOnce('https://cdn.jsdelivr.net/npm/@tensorflow-models/handpose@0.1.0/dist/handpose.js');
+
+  const tf = window.tf;
+  const handpose = window.handpose;
+  if (!tf || !handpose) {
+    throw new Error('TensorFlow.js or the Handpose browser library did not expose its expected global API.');
+  }
+
+  try {
+    await tf.setBackend('webgl');
+  } catch (webglError) {
+    console.warn('TensorFlow.js WebGL backend unavailable; trying CPU backend.', webglError);
+    await tf.setBackend('cpu');
+  }
+  await tf.ready();
+
+  const model = await handpose.load({ detectionConfidence: 0.7 });
+  return { tf, model };
+}
+
 interface TfHandPoseDetector {
   estimateHands(input: HTMLVideoElement): Promise<Array<{ keypoints: Array<{ x: number; y: number; z?: number; name?: string }>; handedness?: string; score?: number }>>;
   dispose(): void;
@@ -50,6 +120,7 @@ export function useCameraAndHands({
   const landmarkerRef = useRef<HandLandmarker | null>(null);
   const tfDetectorRef = useRef<TfHandPoseDetector | null>(null);
   const rafRef = useRef<number | null>(null);
+  const lastInferenceErrorRef = useRef<string | null>(null);
 
   const [cameraStatus, setCameraStatus] = useState<'idle' | 'requesting' | 'active' | 'denied' | 'error'>('idle');
   const [cameraErrorMsg, setCameraErrorMsg] = useState<string | null>(null);
@@ -227,7 +298,10 @@ export function useCameraAndHands({
     let cancelled = false;
 
     async function initializeTracker() {
-      if (!handTrackingEnabled) return;
+      if (!handTrackingEnabled) {
+        setModelStatus('idle');
+        return;
+      }
       setModelStatus('loading');
       try {
         if (trackingEngine === 'mediapipe') {
@@ -264,27 +338,7 @@ export function useCameraAndHands({
           if (cancelled) { landmarker.close(); return; }
           landmarkerRef.current = landmarker;
         } else {
-          // Load TFJS modules from ESM CDN so this optional engine does not add
-          // a large mandatory bundle to the default MediaPipe experience.
-          // @ts-expect-error Runtime ESM URL import is intentional.
-          const tfCore = await import(/* @vite-ignore */ 'https://esm.sh/@tensorflow/tfjs-core@4.22.0');
-          // @ts-expect-error Runtime ESM URL import is intentional.
-          await import(/* @vite-ignore */ 'https://esm.sh/@tensorflow/tfjs-converter@4.22.0');
-          // @ts-expect-error Runtime ESM URL import is intentional.
-          await import(/* @vite-ignore */ 'https://esm.sh/@tensorflow/tfjs-backend-webgl@4.22.0');
-          // Use the standalone TensorFlow.js Handpose model. The newer
-          // hand-pose-detection package imports @mediapipe/hands even when
-          // configured for runtime:'tfjs'; that ESM package has no named
-          // "Hands" export on this CDN and prevents TFJS initialization.
-          // Pin peer dependencies to the same CDN versions used above. Do not mark
-          // them external: that leaves bare package specifiers in the browser,
-          // which cannot resolve without an import map or bundler.
-          // @ts-expect-error Runtime ESM URL import is intentional.
-          const handPose = await import(/* @vite-ignore */ 'https://esm.sh/@tensorflow-models/handpose@0.1.0?deps=@tensorflow/tfjs-core@4.22.0,@tensorflow/tfjs-converter@4.22.0');
-          await tfCore.setBackend('webgl');
-          await tfCore.ready();
-          if (cancelled) return;
-          const model = await handPose.load();
+          const { model } = await loadTensorFlowHandPoseModel();
           const landmarkNames = [
             'wrist',
             'thumb_cmc', 'thumb_mcp', 'thumb_ip', 'thumb_tip',
@@ -295,8 +349,8 @@ export function useCameraAndHands({
           ];
           const detector: TfHandPoseDetector = {
             estimateHands: async (input) => {
-              const predictions = await model.estimateHands(input);
-              return predictions.map((prediction: { landmarks: number[][]; handInViewConfidence?: number }) => ({
+              const predictions = await model.estimateHands(input, false);
+              return predictions.map((prediction) => ({
                 keypoints: prediction.landmarks.map((point, index) => ({
                   x: point[0],
                   y: point[1],
@@ -576,8 +630,14 @@ export function useCameraAndHands({
                   : prev
               );
             }
-          } catch {
-            // Frame skip on transient video resize
+          } catch (err) {
+            // Do not hide inference failures: initialization may succeed while
+            // frame inference fails (for example, due to an unsupported backend).
+            const message = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+            if (lastInferenceErrorRef.current !== message) {
+              lastInferenceErrorRef.current = message;
+              console.warn(`${trackingEngine} hand inference failed:`, err);
+            }
           }
         }
       }
