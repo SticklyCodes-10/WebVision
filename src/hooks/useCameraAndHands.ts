@@ -40,7 +40,10 @@ function loadBrowserScriptOnce(src: string): Promise<void> {
     script.async = true;
     script.crossOrigin = 'anonymous';
     script.onload = () => resolve();
-    script.onerror = () => reject(new Error(`Unable to load TensorFlow.js script: ${src}`));
+    script.onerror = () => {
+      browserScriptPromises.delete(src);
+      reject(new Error(`Unable to load TensorFlow.js script: ${src}`));
+    };
     document.head.appendChild(script);
   });
 
@@ -61,11 +64,17 @@ async function loadTensorFlowHandPoseModel(): Promise<{ tf: TfJsBrowserRuntime; 
     throw new Error('TensorFlow.js or the Handpose browser library did not expose its expected global API.');
   }
 
+  let backendReady = false;
   try {
-    await tf.setBackend('webgl');
+    backendReady = await tf.setBackend('webgl');
   } catch (webglError) {
     console.warn('TensorFlow.js WebGL backend unavailable; trying CPU backend.', webglError);
-    await tf.setBackend('cpu');
+  }
+  if (!backendReady) {
+    backendReady = await tf.setBackend('cpu');
+  }
+  if (!backendReady) {
+    throw new Error('TensorFlow.js could not initialize either the WebGL or CPU backend.');
   }
   await tf.ready();
 
