@@ -247,8 +247,7 @@ export const SettingsApp: React.FC<SettingsAppProps> = ({
                 </button>
               </div>
               <p className="text-[10px] text-white/55">
-                Switching engines reloads the hand model. TensorFlow.js downloads its model the first time you select it.
-                MediaPipe stays selected by default; you can switch back here at any time.
+                Switching engines reloads the selected hand model. TensorFlow.js loads its WebGL backend and hand model on first use.
               </p>
 
               {/* Pinch Sensitivity Slider */}
