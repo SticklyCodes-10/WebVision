@@ -17,7 +17,7 @@ interface SpatialWindowProps {
   children: React.ReactNode;
 }
 
-export const SpatialWindow: React.FC<SpatialWindowProps> = ({
+const SpatialWindowComponent: React.FC<SpatialWindowProps> = ({
   windowState,
   isFocused,
   depthTiltEnabled,
@@ -329,3 +329,5 @@ export const SpatialWindow: React.FC<SpatialWindowProps> = ({
     </div>
   );
 };
+
+export const SpatialWindow = React.memo(SpatialWindowComponent);
