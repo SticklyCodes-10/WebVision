@@ -239,7 +239,7 @@ export function useCameraAndHands({
     let cancelled = false;
 
     async function initializeTracker() {
-      if (!handTrackingEnabled) {
+      if (!cameraEnabled || cameraStatus !== 'active' || !handTrackingEnabled) {
         setModelStatus('idle');
         return;
       }
@@ -296,7 +296,7 @@ export function useCameraAndHands({
       landmarkerRef.current?.close();
       landmarkerRef.current = null;
     };
-  }, [handTrackingEnabled]);
+  }, [cameraEnabled, cameraStatus, handTrackingEnabled]);
 
   // MediaPipe real-time detection loop
   useEffect(() => {
