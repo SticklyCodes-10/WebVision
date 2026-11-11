@@ -248,7 +248,7 @@ export const SettingsApp: React.FC<SettingsAppProps> = ({
               </div>
               <p className="text-[10px] text-white/55">
                 Switching engines reloads the hand model. TensorFlow.js downloads its model the first time you select it.
-                The first engine is the default and remains available as a fallback.
+                MediaPipe stays selected by default; you can switch back here at any time.
               </p>
 
               {/* Pinch Sensitivity Slider */}
