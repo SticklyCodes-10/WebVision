@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertCircle,
   Camera,
@@ -388,8 +388,8 @@ export function App() {
     setSettings((prev) => ({ ...prev, ...partial }));
   }, []);
 
-  // Handler for "Enter Spatial Mode" — requests Rear Camera ("environment") + starts MediaPipe
-  const handleEnterSpatialMode = useCallback(async () => {
+  // Camera startup is driven by the cameraEnabled effect in the hook, avoiding duplicate streams.
+  const handleEnterSpatialMode = useCallback(() => {
     setShowEntryPortal(false);
     setDismissedCameraAlert(false);
     updateSettings({
@@ -398,11 +398,7 @@ export function App() {
       handTrackingEnabled: true,
       immersionLevel: 15, // Keep background mostly clear for live rear camera passthrough
     });
-    const ok = await startCamera('environment');
-    if (ok) {
-      showToast('📷 Rear Camera Passthrough & MediaPipe Hand Tracking Active');
-    }
-  }, [startCamera, updateSettings, showToast]);
+  }, [updateSettings]);
 
   // Handler for "Enter VR Mode" — WebXR session check + Stereoscopic Dual-Eye Headset view
   const handleToggleVRMode = useCallback(async () => {
@@ -417,7 +413,6 @@ export function App() {
           cameraFacingMode: 'environment',
           vrMode: true,
         });
-        startCamera('environment');
       } else {
         updateSettings({ vrMode: true });
       }
@@ -444,7 +439,7 @@ export function App() {
       updateSettings({ vrMode: false });
       showToast('Exited VR Mode');
     }
-  }, [settings.vrMode, settings.cameraEnabled, updateSettings, startCamera, showToast]);
+  }, [settings.vrMode, settings.cameraEnabled, updateSettings, showToast]);
 
   // Escape key exits VR mode or closes Home Grid
   useEffect(() => {
@@ -465,66 +460,69 @@ export function App() {
   const isCameraFeedVisible = settings.cameraEnabled && cameraStatus === 'active';
   const effectiveEnvOpacity = isCameraFeedVisible ? settings.immersionLevel / 100 : 1;
 
-  // Render content for a specific app ID
+  // Keep static app elements stable while live hand telemetry updates the shell.
+  const staticAppContent = useMemo(() => ({
+    safari: <SafariApp />,
+    music: <MusicApp />,
+    messages: <MessagesApp />,
+    notes: <NotesApp />,
+    calendar: <CalendarApp />,
+    weather: <WeatherApp />,
+  }), []);
+
+  const photosAppContent = useMemo(() => (
+    <PhotosApp
+      cameraActive={isCameraFeedVisible}
+      onCaptureFrame={captureCameraFrame}
+      onRequestCamera={handleEnterSpatialMode}
+    />
+  ), [isCameraFeedVisible, captureCameraFrame, handleEnterSpatialMode]);
+
+  const settingsAppContent = useMemo(() => (
+    <SettingsApp
+      settings={settings}
+      cameraStatus={cameraStatus}
+      activeCameraLabel={activeCameraLabel}
+      modelStatus={modelStatus}
+      telemetry={telemetry}
+      webXRSupported={webXRSupported}
+      onUpdateSettings={updateSettings}
+      onRestartCamera={() => startCamera(settings.cameraFacingMode)}
+      onResetWindows={() => {
+        setWindows(createInitialWindows(window.innerWidth, window.innerHeight));
+        showToast('Recentered all spatial windows');
+      }}
+      onCloseAllWindows={() => {
+        setWindows((prev) => {
+          const copy = { ...prev };
+          (Object.keys(copy) as AppId[]).forEach((k) => {
+            copy[k] = { ...copy[k], isOpen: false, isMinimized: false };
+          });
+          return copy;
+        });
+        showToast('Closed all open windows');
+      }}
+      onResetAllSettings={() => {
+        setSettings(DEFAULT_SETTINGS);
+        setWindows(createInitialWindows(window.innerWidth, window.innerHeight));
+        showToast('Restored visionOS factory settings');
+      }}
+    />
+  ), [
+    settings, cameraStatus, activeCameraLabel, modelStatus, telemetry, webXRSupported,
+    updateSettings, startCamera, showToast,
+  ]);
+
+  const appStoreContent = useMemo(
+    () => <AppStoreApp onLaunchCoreApp={openOrRestoreApp} />,
+    [openOrRestoreApp]
+  );
+
   const renderAppContent = (appId: AppId) => {
-    switch (appId) {
-      case 'safari':
-        return <SafariApp />;
-      case 'photos':
-        return (
-          <PhotosApp
-            cameraActive={isCameraFeedVisible}
-            onCaptureFrame={captureCameraFrame}
-            onRequestCamera={handleEnterSpatialMode}
-          />
-        );
-      case 'music':
-        return <MusicApp />;
-      case 'settings':
-        return (
-          <SettingsApp
-            settings={settings}
-            cameraStatus={cameraStatus}
-            activeCameraLabel={activeCameraLabel}
-            modelStatus={modelStatus}
-            telemetry={telemetry}
-            webXRSupported={webXRSupported}
-            onUpdateSettings={updateSettings}
-            onRestartCamera={() => startCamera(settings.cameraFacingMode)}
-            onResetWindows={() => {
-              setWindows(createInitialWindows(window.innerWidth, window.innerHeight));
-              showToast('Recentered all spatial windows');
-            }}
-            onCloseAllWindows={() => {
-              setWindows((prev) => {
-                const copy = { ...prev };
-                (Object.keys(copy) as AppId[]).forEach((k) => {
-                  copy[k] = { ...copy[k], isOpen: false, isMinimized: false };
-                });
-                return copy;
-              });
-              showToast('Closed all open windows');
-            }}
-            onResetAllSettings={() => {
-              setSettings(DEFAULT_SETTINGS);
-              setWindows(createInitialWindows(window.innerWidth, window.innerHeight));
-              showToast('Restored visionOS factory settings');
-            }}
-          />
-        );
-      case 'messages':
-        return <MessagesApp />;
-      case 'notes':
-        return <NotesApp />;
-      case 'calendar':
-        return <CalendarApp />;
-      case 'weather':
-        return <WeatherApp />;
-      case 'appstore':
-        return <AppStoreApp onLaunchCoreApp={openOrRestoreApp} />;
-      default:
-        return null;
-    }
+    if (appId === 'photos') return photosAppContent;
+    if (appId === 'settings') return settingsAppContent;
+    if (appId === 'appstore') return appStoreContent;
+    return staticAppContent[appId as keyof typeof staticAppContent] ?? null;
   };
 
   const activeFocusedAppId =
