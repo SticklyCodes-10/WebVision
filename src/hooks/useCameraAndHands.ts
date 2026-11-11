@@ -276,8 +276,11 @@ export function useCameraAndHands({
           // hand-pose-detection package imports @mediapipe/hands even when
           // configured for runtime:'tfjs'; that ESM package has no named
           // "Hands" export on this CDN and prevents TFJS initialization.
+          // Pin peer dependencies to the same CDN versions used above. Do not mark
+          // them external: that leaves bare package specifiers in the browser,
+          // which cannot resolve without an import map or bundler.
           // @ts-expect-error Runtime ESM URL import is intentional.
-          const handPose = await import(/* @vite-ignore */ 'https://esm.sh/@tensorflow-models/handpose@0.1.0?external=@tensorflow/tfjs-core,@tensorflow/tfjs-converter');
+          const handPose = await import(/* @vite-ignore */ 'https://esm.sh/@tensorflow-models/handpose@0.1.0?deps=@tensorflow/tfjs-core@4.22.0,@tensorflow/tfjs-converter@4.22.0');
           await tfCore.setBackend('webgl');
           await tfCore.ready();
           if (cancelled) return;
