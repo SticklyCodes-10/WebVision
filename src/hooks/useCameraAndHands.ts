@@ -40,6 +40,7 @@ export function useCameraAndHands({
 }: UseCameraAndHandsOptions) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const cameraRequestIdRef = useRef(0);
   const landmarkerRef = useRef<HandLandmarker | null>(null);
   const rafRef = useRef<number | null>(null);
   const lastInferenceErrorRef = useRef<string | null>(null);
@@ -126,6 +127,7 @@ export function useCameraAndHands({
 
   // Stop existing camera stream
   const stopCamera = useCallback(() => {
+    cameraRequestIdRef.current += 1;
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
@@ -139,6 +141,7 @@ export function useCameraAndHands({
   // Start Rear or Front Camera using navigator.mediaDevices.getUserMedia
   const startCamera = useCallback(
     async (requestedFacingMode: 'environment' | 'user' = facingMode) => {
+      const requestId = ++cameraRequestIdRef.current;
       if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
         setCameraStatus('error');
         setCameraErrorMsg('Camera API (getUserMedia) is not supported in this browser context.');
@@ -161,17 +164,27 @@ export function useCameraAndHands({
           stream = await navigator.mediaDevices.getUserMedia({
             video: {
               facingMode: { ideal: requestedFacingMode },
-              width: { ideal: 1280 },
-              height: { ideal: 720 },
+              width: { ideal: 640 },
+              height: { ideal: 480 },
+              frameRate: { ideal: 24, max: 30 },
             },
             audio: false,
           });
         } catch {
           // Fallback to any available video input device (e.g. desktop webcam without environment tag)
           stream = await navigator.mediaDevices.getUserMedia({
-            video: true,
+            video: {
+              width: { ideal: 640 },
+              height: { ideal: 480 },
+              frameRate: { ideal: 24, max: 30 },
+            },
             audio: false,
           });
+        }
+
+        if (requestId !== cameraRequestIdRef.current) {
+          stream.getTracks().forEach((track) => track.stop());
+          return false;
         }
 
         streamRef.current = stream;
@@ -189,6 +202,7 @@ export function useCameraAndHands({
         setCameraStatus('active');
         return true;
       } catch (err: unknown) {
+        if (requestId !== cameraRequestIdRef.current) return false;
         const errorName = err instanceof Error ? err.name : 'CameraError';
         if (errorName === 'NotAllowedError' || errorName === 'PermissionDeniedError') {
           setCameraStatus('denied');
@@ -211,7 +225,12 @@ export function useCameraAndHands({
       stopCamera();
     }
     return () => {
-      // Cleanup on unmount
+      cameraRequestIdRef.current += 1;
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((track) => track.stop());
+        streamRef.current = null;
+      }
+      if (videoRef.current) videoRef.current.srcObject = null;
     };
   }, [cameraEnabled, facingMode, startCamera, stopCamera]);
 
@@ -307,7 +326,7 @@ export function useCameraAndHands({
         }
 
         // Hand inference is expensive; cap it at ~30 FPS instead of running on every display refresh.
-        if (video.currentTime !== lastVideoTime && now - lastDetectionTime >= 33) {
+        if (video.currentTime !== lastVideoTime && now - lastDetectionTime >= 42) {
           lastVideoTime = video.currentTime;
           lastDetectionTime = now;
           try {
@@ -418,6 +437,12 @@ export function useCameraAndHands({
               const nextY = distanceToTarget < 1.6 ? prevY : prevY + (targetY - prevY) * alpha;
               smoothedPosRef.current = { x: nextX, y: nextY };
 
+              // Keep cursor movement on the compositor: update CSS variables without re-rendering React.
+              if (typeof document !== 'undefined') {
+                document.documentElement.style.setProperty('--hand-cursor-x', `${nextX}px`);
+                document.documentElement.style.setProperty('--hand-cursor-y', `${nextY}px`);
+              }
+
               // Handle Pinch state transitions for real interactive clicks & window dragging
               if (isPinching && !wasPinchingRef.current) {
                 wasPinchingRef.current = true;
@@ -458,8 +483,9 @@ export function useCameraAndHands({
               }
 
               // React state drives the UI, so publish telemetry at 20 Hz rather than
-              // forcing the entire desktop to re-render on every camera frame.
-              if (now - lastTelemetryUpdateRef.current >= 50) {
+              // forcing the entire desktop to re-render on every camera frame. Cursor
+              // position above remains full-rate; React telemetry is intentionally slower.
+              if (now - lastTelemetryUpdateRef.current >= 200) {
                 lastTelemetryUpdateRef.current = now;
                 setTelemetry({
                 detected: true,
