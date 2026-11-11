@@ -272,18 +272,42 @@ export function useCameraAndHands({
           await import(/* @vite-ignore */ 'https://esm.sh/@tensorflow/tfjs-converter@4.22.0');
           // @ts-expect-error Runtime ESM URL import is intentional.
           await import(/* @vite-ignore */ 'https://esm.sh/@tensorflow/tfjs-backend-webgl@4.22.0');
+          // Use the standalone TensorFlow.js Handpose model. The newer
+          // hand-pose-detection package imports @mediapipe/hands even when
+          // configured for runtime:'tfjs'; that ESM package has no named
+          // "Hands" export on this CDN and prevents TFJS initialization.
           // @ts-expect-error Runtime ESM URL import is intentional.
-          const handPose = await import(/* @vite-ignore */ 'https://esm.sh/@tensorflow-models/hand-pose-detection@2.0.1');
+          const handPose = await import(/* @vite-ignore */ 'https://esm.sh/@tensorflow-models/handpose@0.1.0?external=@tensorflow/tfjs-core,@tensorflow/tfjs-converter');
           await tfCore.setBackend('webgl');
           await tfCore.ready();
           if (cancelled) return;
-          const detector = await handPose.createDetector(handPose.SupportedModels.MediaPipeHands, {
-            runtime: 'tfjs',
-            modelType: 'lite',
-            maxHands: 1,
-          });
+          const model = await handPose.load();
+          const landmarkNames = [
+            'wrist',
+            'thumb_cmc', 'thumb_mcp', 'thumb_ip', 'thumb_tip',
+            'index_finger_mcp', 'index_finger_pip', 'index_finger_dip', 'index_finger_tip',
+            'middle_finger_mcp', 'middle_finger_pip', 'middle_finger_dip', 'middle_finger_tip',
+            'ring_finger_mcp', 'ring_finger_pip', 'ring_finger_dip', 'ring_finger_tip',
+            'pinky_finger_mcp', 'pinky_finger_pip', 'pinky_finger_dip', 'pinky_finger_tip',
+          ];
+          const detector: TfHandPoseDetector = {
+            estimateHands: async (input) => {
+              const predictions = await model.estimateHands(input);
+              return predictions.map((prediction: { landmarks: number[][]; handInViewConfidence?: number }) => ({
+                keypoints: prediction.landmarks.map((point, index) => ({
+                  x: point[0],
+                  y: point[1],
+                  z: point[2] || 0,
+                  name: landmarkNames[index],
+                })),
+                handedness: 'Unknown',
+                score: prediction.handInViewConfidence ?? 0.9,
+              }));
+            },
+            dispose: () => model.dispose(),
+          };
           if (cancelled) { detector.dispose(); return; }
-          tfDetectorRef.current = detector as TfHandPoseDetector;
+          tfDetectorRef.current = detector;
         }
         if (!cancelled) setModelStatus('ready');
       } catch (err) {
