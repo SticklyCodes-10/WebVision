@@ -336,12 +336,13 @@ export const SettingsApp: React.FC<SettingsAppProps> = ({
                 </div>
                 <input
                   type="range"
-                  min={16}
-                  max={64}
+                  min={8}
+                  max={24}
                   value={settings.glassBlur}
                   onChange={(e) => onUpdateSettings({ glassBlur: Number(e.target.value) })}
                   className="w-full accent-sky-400"
                 />
+                <p className="text-[10px] text-white/50">Blur is automatically reduced further on touch devices to preserve frame rate.</p>
               </div>
 
               <div className="space-y-1">
