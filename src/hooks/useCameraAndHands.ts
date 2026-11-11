@@ -319,7 +319,7 @@ export function useCameraAndHands({
     let lastDetectionTime = 0;
     let active = true;
 
-    const detectFrame = () => {
+    const detectFrame = async () => {
       if (!active) return;
 
       const video = videoRef.current;
@@ -566,7 +566,7 @@ export function useCameraAndHands({
         cancelAnimationFrame(rafRef.current);
       }
     };
-  }, [cameraEnabled, handTrackingEnabled, cameraStatus, modelStatus]);
+  }, [cameraEnabled, handTrackingEnabled, cameraStatus, modelStatus, trackingEngine]);
 
   // Capture a live photo snapshot from the active camera video feed
   const captureCameraFrame = useCallback((): string | null => {
