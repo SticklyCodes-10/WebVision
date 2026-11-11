@@ -361,7 +361,6 @@ export function App() {
     facingMode: settings.cameraFacingMode,
     mirrorCamera: settings.mirrorCamera,
     handTrackingEnabled: settings.handTrackingEnabled,
-    trackingEngine: settings.trackingEngine,
     pinchSensitivity: settings.pinchSensitivity,
     cursorSmoothing: settings.cursorSmoothing,
     onPinchStart: handleHandPinchStart,
@@ -401,7 +400,7 @@ export function App() {
     });
     const ok = await startCamera('environment');
     if (ok) {
-      showToast(`📷 Rear Camera Passthrough & ${settings.trackingEngine === 'tensorflow' ? 'TensorFlow.js' : 'MediaPipe'} Hand Tracking Active`);
+      showToast('📷 Rear Camera Passthrough & MediaPipe Hand Tracking Active');
     }
   }, [startCamera, updateSettings, showToast]);
 

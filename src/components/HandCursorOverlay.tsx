@@ -153,7 +153,7 @@ export const HandCursorOverlay: React.FC<HandCursorOverlayProps> = ({
           <div className="flex items-center justify-between mb-1.5 px-1">
             <div className="flex items-center gap-1.5 text-[11px] font-semibold">
               <Hand size={12} className="text-sky-300" />
-              <span>MediaPipe Hand HUD</span>
+              <span>Hand Tracking HUD</span>
             </div>
             <button
               type="button"
