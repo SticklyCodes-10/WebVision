@@ -273,7 +273,7 @@ export function useCameraAndHands({
           // @ts-expect-error Runtime ESM URL import is intentional.
           await import(/* @vite-ignore */ 'https://esm.sh/@tensorflow/tfjs-backend-webgl@4.22.0');
           // @ts-expect-error Runtime ESM URL import is intentional.
-          const handPose = await import(/* @vite-ignore */ 'https://esm.sh/@tensorflow-models/hand-pose-detection@2.0.1?external=@tensorflow/tfjs-core,@tensorflow/tfjs-converter');
+          const handPose = await import(/* @vite-ignore */ 'https://esm.sh/@tensorflow-models/hand-pose-detection@2.0.1');
           await tfCore.setBackend('webgl');
           await tfCore.ready();
           if (cancelled) return;
