@@ -24,6 +24,19 @@ function dist2D(a: NormalizedLandmark, b: NormalizedLandmark): number {
   return Math.hypot(dx, dy);
 }
 
+function jointAngle(a: NormalizedLandmark, joint: NormalizedLandmark, c: NormalizedLandmark): number {
+  const ax = a.x - joint.x;
+  const ay = a.y - joint.y;
+  const az = a.z - joint.z;
+  const cx = c.x - joint.x;
+  const cy = c.y - joint.y;
+  const cz = c.z - joint.z;
+  const denominator = Math.hypot(ax, ay, az) * Math.hypot(cx, cy, cz);
+  if (denominator < 1e-6) return 0;
+  const cosine = Math.max(-1, Math.min(1, (ax * cx + ay * cy + az * cz) / denominator));
+  return (Math.acos(cosine) * 180) / Math.PI;
+}
+
 export function useCameraAndHands({
   cameraEnabled,
   facingMode,
@@ -365,14 +378,15 @@ export function useCameraAndHands({
 
             if (lm) {
 
-              // Key landmarks
-              const wrist = lm[0];
-              const thumbMcp = lm[2];
+              // Key landmarks (MediaPipe Hands: MCP, PIP, DIP, TIP per finger)
               const thumbTip = lm[4];
+              const indexMcp = lm[5];
               const indexPip = lm[6];
               const indexTip = lm[8];
+              const middleMcp = lm[9];
               const middlePip = lm[10];
               const middleTip = lm[12];
+              const ringMcp = lm[13];
               const ringPip = lm[14];
               const ringTip = lm[16];
               const pinkyMcp = lm[17];
@@ -384,12 +398,27 @@ export function useCameraAndHands({
               const { pinchSensitivity: threshold, cursorSmoothing: smoothing, mirrorCamera: mirrored, facingMode: mode } =
                 callbacksRef.current;
 
-              // Determine finger extensions relative to wrist
-              const indexExtended = dist2D(wrist, indexTip) > dist2D(wrist, indexPip) * 1.13;
-              const middleExtended = dist2D(wrist, middleTip) > dist2D(wrist, middlePip) * 1.13;
-              const ringExtended = dist2D(wrist, ringTip) > dist2D(wrist, ringPip) * 1.1;
-              const pinkyExtended = dist2D(wrist, pinkyTip) > dist2D(wrist, pinkyPip) * 1.1;
-              const thumbExtended = dist2D(pinkyMcp, thumbTip) > dist2D(pinkyMcp, thumbMcp) * 1.18;
+              // A straight finger forms an almost 180-degree angle at its PIP joint.
+              // This is far less sensitive to hand position and camera distance than
+              // comparing fingertip-to-wrist distances.
+              const indexAngle = jointAngle(indexMcp, indexPip, indexTip);
+              const middleAngle = jointAngle(middleMcp, middlePip, middleTip);
+              const ringAngle = jointAngle(ringMcp, ringPip, ringTip);
+              const pinkyAngle = jointAngle(pinkyMcp, pinkyPip, pinkyTip);
+
+              const indexExtended = indexAngle > 150;
+              const middleExtended = middleAngle > 150;
+              const ringExtended = ringAngle > 148;
+              const pinkyExtended = pinkyAngle > 145;
+              const fourFingersExtended = indexExtended && middleExtended && ringExtended && pinkyExtended;
+              const fourFingersCurled =
+                indexAngle < 132 && middleAngle < 132 && ringAngle < 135 && pinkyAngle < 138;
+
+              // Thumb abduction is measured relative to palm width, making the
+              // open-palm test scale independent and less dependent on handedness.
+              const palmWidth = dist2D(lm[0], middleMcp);
+              const thumbSpread = palmWidth > 0.001 ? dist2D(thumbTip, indexMcp) / palmWidth : 0;
+              const thumbExtended = thumbSpread > 0.42;
 
               // Classify Gesture
               let gesture: HandGestureType = 'pointing';
@@ -408,30 +437,11 @@ export function useCameraAndHands({
 
               if (isPinching) {
                 gesture = 'pinch';
-              } else if (
-                indexExtended &&
-                middleExtended &&
-                ringExtended &&
-                pinkyExtended &&
-                thumbExtended &&
-                pinchDistance > threshold * 1.35
-              ) {
+              } else if (fourFingersExtended && thumbExtended && pinchDistance > threshold * 1.25) {
                 gesture = 'open_palm';
-              } else if (
-                !indexExtended &&
-                !middleExtended &&
-                !ringExtended &&
-                !pinkyExtended &&
-                pinchDistance > threshold * 0.85
-              ) {
+              } else if (fourFingersCurled) {
                 gesture = 'closed_fist';
-              } else if (
-                indexExtended &&
-                middleExtended &&
-                !ringExtended &&
-                !pinkyExtended &&
-                pinchDistance > threshold * 1.15
-              ) {
+              } else if (indexExtended && middleExtended && !ringExtended && !pinkyExtended) {
                 gesture = 'two_fingers';
               }
 
