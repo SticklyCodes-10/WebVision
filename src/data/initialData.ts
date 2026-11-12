@@ -119,7 +119,7 @@ export function createInitialWindows(viewportW: number, viewportH: number): Reco
     safari: {
       id: 'safari',
       title: 'Safari',
-      isOpen: true,
+      isOpen: false,
       isMinimized: false,
       zIndex: 12,
       x: isMobile ? centerX : Math.max(24, centerX - 140),
@@ -132,7 +132,7 @@ export function createInitialWindows(viewportW: number, viewportH: number): Reco
     photos: {
       id: 'photos',
       title: 'Photos',
-      isOpen: !isMobile,
+      isOpen: false,
       isMinimized: false,
       zIndex: 11,
       x: isMobile ? centerX : Math.min(viewportW - baseW - 24, centerX + 170),
