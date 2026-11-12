@@ -38,7 +38,7 @@ export function App() {
       typeof window !== 'undefined' ? window.innerHeight : 800
     )
   );
-  const [focusedApp, setFocusedApp] = useState<AppId | null>('safari');
+  const [focusedApp, setFocusedApp] = useState<AppId | null>(null);
   const [, setTopZIndex] = useState<number>(20);
   const [showEntryPortal, setShowEntryPortal] = useState<boolean>(true);
   const [showHomeGrid, setShowHomeGrid] = useState<boolean>(false);
