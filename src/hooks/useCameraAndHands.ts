@@ -82,7 +82,7 @@ export function useCameraAndHands({
   const fpsCounterRef = useRef<{ frames: number; lastTime: number; fps: number }>({
     frames: 0,
     lastTime: performance.now(),
-    fps: 30,
+    fps: 60,
   });
 
   // Keep latest callbacks in refs
@@ -166,7 +166,7 @@ export function useCameraAndHands({
               facingMode: { ideal: requestedFacingMode },
               width: { ideal: 640 },
               height: { ideal: 480 },
-              frameRate: { ideal: 24, max: 30 },
+              frameRate: { ideal: 60, max: 60 },
             },
             audio: false,
           });
@@ -176,7 +176,7 @@ export function useCameraAndHands({
             video: {
               width: { ideal: 640 },
               height: { ideal: 480 },
-              frameRate: { ideal: 24, max: 30 },
+              frameRate: { ideal: 60, max: 60 },
             },
             audio: false,
           });
@@ -337,7 +337,7 @@ export function useCameraAndHands({
       if (video && landmarker && video.readyState >= 2 && video.videoWidth > 0) {
         const now = performance.now();
 
-        // Update FPS counter
+        // Count actual inference opportunities, not animation-loop callbacks.
         fpsCounterRef.current.frames++;
         if (now - fpsCounterRef.current.lastTime >= 1000) {
           fpsCounterRef.current.fps = fpsCounterRef.current.frames;
@@ -345,8 +345,9 @@ export function useCameraAndHands({
           fpsCounterRef.current.lastTime = now;
         }
 
-        // Hand inference is expensive; cap it at 20 FPS and skip frames while backgrounded.
-        if (!document.hidden && video.currentTime !== lastVideoTime && now - lastDetectionTime >= 50) {
+        // Target 60 FPS when the camera and device can supply fresh frames. The
+        // video.currentTime guard prevents duplicate inference on the same frame.
+        if (!document.hidden && video.currentTime !== lastVideoTime && now - lastDetectionTime >= (1000 / 60)) {
           lastVideoTime = video.currentTime;
           lastDetectionTime = now;
           try {
