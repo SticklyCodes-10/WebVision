@@ -219,12 +219,28 @@ export function useCameraAndHands({
 
   // Sync cameraEnabled & facingMode changes
   useEffect(() => {
-    if (cameraEnabled) {
-      startCamera(facingMode);
-    } else {
+    if (!cameraEnabled) {
       stopCamera();
+      return;
     }
+
+    // Release the camera while the page is backgrounded to avoid needless
+    // sensor, ISP, and battery use. Reacquire it when the user returns.
+    const syncCameraWithVisibility = () => {
+      if (document.visibilityState === 'hidden') {
+        stopCamera();
+      } else {
+        startCamera(facingMode);
+      }
+    };
+
+    if (document.visibilityState === 'visible') {
+      startCamera(facingMode);
+    }
+    document.addEventListener('visibilitychange', syncCameraWithVisibility);
+
     return () => {
+      document.removeEventListener('visibilitychange', syncCameraWithVisibility);
       cameraRequestIdRef.current += 1;
       if (streamRef.current) {
         streamRef.current.getTracks().forEach((track) => track.stop());
@@ -311,6 +327,10 @@ export function useCameraAndHands({
 
     const detectFrame = async () => {
       if (!active) return;
+      if (document.hidden) {
+        rafRef.current = requestAnimationFrame(detectFrame);
+        return;
+      }
 
       const video = videoRef.current;
       const landmarker = landmarkerRef.current;
@@ -325,8 +345,8 @@ export function useCameraAndHands({
           fpsCounterRef.current.lastTime = now;
         }
 
-        // Hand inference is expensive; cap it at ~30 FPS instead of running on every display refresh.
-        if (video.currentTime !== lastVideoTime && now - lastDetectionTime >= 42) {
+        // Hand inference is expensive; cap it at 20 FPS and skip frames while backgrounded.
+        if (!document.hidden && video.currentTime !== lastVideoTime && now - lastDetectionTime >= 50) {
           lastVideoTime = video.currentTime;
           lastDetectionTime = now;
           try {
